@@ -66,7 +66,8 @@ uint32_t DSreqTime;
 float pitch, roll;
 
 int16_t ax, ay, az;
-float Volt, Temperatur, Tilt;
+float Volt, Temperatur, Tilt, Trubidity;
+uint16_t FermentationActivity;
 
 bool DSrequested = false;
 
@@ -339,6 +340,8 @@ bool uploadData(uint8_t service) {
     ubiclient.add("tilt", Tilt);
     ubiclient.add("temperature", Temperatur);
     ubiclient.add("battery", Volt);
+	ubiclient.add("trubidity", Trubidity);
+	ubiclient.add("fermentationactivity", FermentationActivity);
     // This creates a new Device, only with TCP transmission
     ubiclient.setDataSourceName(my_name);
     return ubiclient.sendAll(false);
@@ -552,6 +555,30 @@ float getTemperature(bool block = false) {
   return t;
 }
 
+void getTrubidity(float *average, uint16_t *activity)
+{
+	uint16_t minValue = 0;
+	uint16_t maxValue = 0;
+	uint16_t currentValue = 0;
+	uint16_t sum = 0;
+
+	digitalWrite(TRUBIDITY_PWR, 1);
+	
+	for (uint8_t i = 0; i < 10; i++)
+	{
+		currentValue = analogRead(A0);
+		sum += currentValue;
+		if (currentValue < minValue)
+			minValue = currentValue;
+		if (currentValue > maxValue)
+			maxValue = currentValue;
+	}
+	digitalWrite(TRUBIDITY_PWR, 0);
+
+	*average = sum / 10.0;
+	*activity = 1024 * ((maxValue - minValue) / 1024);
+}
+
 void requestTemp() {
   if (DSrequested == false) {
     DS18B20.requestTemperatures();
@@ -586,6 +613,11 @@ bool isSafeMode(float _volt)  {
 void setup() {
 
   Serial.begin(115200);
+
+  // SET POWER OFF
+  pinMode(TRUBIDITY_PWR, OUTPUT);
+  digitalWrite(TRUBIDITY_PWR, 0);
+
   SerialOut("\nFW " FIRMWAREVERSION);
   SerialOut(ESP.getSdkVersion());
 
@@ -628,7 +660,7 @@ void setup() {
   }
   // to make sure we wake up with STA but AP
   WiFi.mode(WIFI_STA);
-  Volt = getBattery();
+  Volt = 3.7; // fake voltage getBattery();
   // we try to survive
   if (isSafeMode(Volt)) WiFi.setOutputPower(0);
   else WiFi.setOutputPower(20.5);
@@ -637,6 +669,12 @@ void setup() {
 
   Temperatur = accelgyro.getTemperature() / 340.00 + 36.53;
   accelgyro.setSleepEnabled(true);
+
+  getTrubidity(&Trubidity, &FermentationActivity);
+  SerialOut(F("Tribidity: "), false);
+  SerialOut(Trubidity);
+  SerialOut(F("FermentationActivity: "), false);
+  SerialOut(FermentationActivity);
 
   SerialOut(F("\na: "), false);
   SerialOut(ax, false);
