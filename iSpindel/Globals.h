@@ -32,7 +32,8 @@
 #define MEDIANROUNDS 7
 #define ACCINTERVAL 200
 #define MEDIANAVRG 3
-#define TRUBIDITY_PWR D8
+#define TRUBIDITY_EMITTER_PWR D7
+#define TRUBIDITY_RECEIVER_PWR D8
 
 #define CBP_ENDPOINT (PSTR("/api/hydrometer/v1/data"))
 
