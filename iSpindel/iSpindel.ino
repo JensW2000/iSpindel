@@ -66,8 +66,7 @@ uint32_t DSreqTime;
 float pitch, roll;
 
 int16_t ax, ay, az;
-float Volt, Temperatur, Tilt, Trubidity;
-uint16_t FermentationActivity;
+float Volt, Temperatur, Tilt, Trubidity, FermentationActivity;
 
 bool DSrequested = false;
 
@@ -95,6 +94,7 @@ void saveConfigCallback() {
   // WiFi.setAutoReconnect(true);
   shouldSaveConfig = true;
 }
+
 bool readConfig() {
   SerialOut(F("mounting FS..."), false);
 
@@ -387,6 +387,7 @@ bool uploadData(uint8_t service) {
   return fhemclient.sendHTTP();
   }
 #endif // DATABASESYSTEM ==
+
 #ifdef API_TCONTROL
   if (service == DTTcontrol) {
   TControl tcclient(my_name, my_server, my_port);
@@ -396,6 +397,8 @@ bool uploadData(uint8_t service) {
   return tcclient.send();
   }
 #endif // DATABASESYSTEM ==
+
+  return false; // DATABASESYSTEM undefined
 }
 
 void sleepManager() {
@@ -555,28 +558,43 @@ float getTemperature(bool block = false) {
   return t;
 }
 
-void getTrubidity(float *average, uint16_t *activity)
+void getTrubidity(float *trubidity, float *activity)
 {
 	uint16_t minValue = 0;
 	uint16_t maxValue = 0;
 	uint16_t currentValue = 0;
 	uint16_t sum = 0;
+	uint16_t iRtemperatureOffset = 0;
+	float iRtemperatureIntensityFactor = 1 + Temperatur / 150;
 
-	digitalWrite(TRUBIDITY_PWR, 1);
-	
-	for (uint8_t i = 0; i < 10; i++)
+	digitalWrite(TRUBIDITY_EMITTER_PWR, 0);
+	digitalWrite(TRUBIDITY_RECEIVER_PWR, 1);
+
+	for (uint8_t i = 0; i < 20; i++)
 	{
-		currentValue = analogRead(A0);
+		iRtemperatureOffset += analogRead(A0);
+	}
+	iRtemperatureOffset = iRtemperatureOffset / 20;
+	SerialOut(F("iRtemperatureOffset: "), false); SerialOut(iRtemperatureOffset);
+
+	digitalWrite(TRUBIDITY_EMITTER_PWR, 1);
+	
+	for (uint8_t i = 0; i < 20; i++)
+	{
+		currentValue = analogRead(A0) - iRtemperatureOffset;
+
 		sum += currentValue;
 		if (currentValue < minValue)
 			minValue = currentValue;
 		if (currentValue > maxValue)
 			maxValue = currentValue;
 	}
-	digitalWrite(TRUBIDITY_PWR, 0);
 
-	*average = sum / 10.0;
-	*activity = 1024 * ((maxValue - minValue) / 1024);
+	digitalWrite(TRUBIDITY_EMITTER_PWR, 0);
+	digitalWrite(TRUBIDITY_RECEIVER_PWR, 0);
+
+	*trubidity = (sum / 20.0) * iRtemperatureIntensityFactor;
+	*activity = 100 * (maxValue - minValue) / 1024;
 }
 
 void requestTemp() {
@@ -615,8 +633,11 @@ void setup() {
   Serial.begin(115200);
 
   // SET POWER OFF
-  pinMode(TRUBIDITY_PWR, OUTPUT);
-  digitalWrite(TRUBIDITY_PWR, 0);
+  pinMode(TRUBIDITY_EMITTER_PWR, OUTPUT);
+  pinMode(TRUBIDITY_RECEIVER_PWR, OUTPUT);
+
+  digitalWrite(TRUBIDITY_EMITTER_PWR, 0);
+  digitalWrite(TRUBIDITY_RECEIVER_PWR, 0);
 
   SerialOut("\nFW " FIRMWAREVERSION);
   SerialOut(ESP.getSdkVersion());
@@ -669,7 +690,7 @@ void setup() {
 
   Temperatur = accelgyro.getTemperature() / 340.00 + 36.53;
   accelgyro.setSleepEnabled(true);
-
+  // Trubidity after Temp !
   getTrubidity(&Trubidity, &FermentationActivity);
   SerialOut(F("Tribidity: "), false);
   SerialOut(Trubidity);
