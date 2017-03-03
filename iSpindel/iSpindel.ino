@@ -577,6 +577,16 @@ void getTrubidity(float *trubidity, float *activity)
 	iRtemperatureOffset = iRtemperatureOffset / 20;
 	SerialOut(F("iRtemperatureOffset: "), false); SerialOut(iRtemperatureOffset);
 
+	digitalWrite(TRUBIDITY_EMITTER_PWR, 0);
+	digitalWrite(TRUBIDITY_RECEIVER_PWR, 1);
+
+	for (uint8_t i = 0; i < 20; i++)
+	{
+		iRtemperatureOffset += analogRead(A0);
+	}
+	iRtemperatureOffset = iRtemperatureOffset / 20;
+	SerialOut(F("iRtemperatureOffset: "), false); SerialOut(iRtemperatureOffset);
+
 	digitalWrite(TRUBIDITY_EMITTER_PWR, 1);
 	
 	for (uint8_t i = 0; i < 20; i++)
