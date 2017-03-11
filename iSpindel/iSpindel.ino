@@ -22,6 +22,7 @@ All rights reserverd by S.Lang <universam@web.de>
 #include <ESP8266WiFi.h> //https://github.com/esp8266/Arduino
 #include <FS.h>          //this needs to be first
 #include <Ticker.h>
+#include "Adafruit_ADS1015.h" //https://github.com/adafruit/Adafruit_ADS1X15
 
 #ifdef API_UBIDOTS
 #include "Ubidots.h"
@@ -45,6 +46,7 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature DS18B20(&oneWire);
 DeviceAddress tempDeviceAddress;
 Ticker flasher;
+Adafruit_ADS1015 ads;
 RunningMedian samples = RunningMedian(MEDIANROUNDS);
 
 DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
@@ -482,6 +484,10 @@ void initAccel() {
   accelgyro.setTempSensorEnabled(true);
 }
 
+void initAds() {
+	ads.begin();
+}
+
 float calculateTilt() {
   float _ax = ax;
   float _ay = ay;
@@ -572,17 +578,7 @@ void getTrubidity(float *trubidity, float *activity)
 
 	for (uint8_t i = 0; i < 20; i++)
 	{
-		iRtemperatureOffset += analogRead(A0);
-	}
-	iRtemperatureOffset = iRtemperatureOffset / 20;
-	SerialOut(F("iRtemperatureOffset: "), false); SerialOut(iRtemperatureOffset);
-
-	digitalWrite(TRUBIDITY_EMITTER_PWR, 0);
-	digitalWrite(TRUBIDITY_RECEIVER_PWR, 1);
-
-	for (uint8_t i = 0; i < 20; i++)
-	{
-		iRtemperatureOffset += analogRead(A0);
+		iRtemperatureOffset += ads.readADC_SingleEnded(0);
 	}
 	iRtemperatureOffset = iRtemperatureOffset / 20;
 	SerialOut(F("iRtemperatureOffset: "), false); SerialOut(iRtemperatureOffset);
@@ -591,7 +587,7 @@ void getTrubidity(float *trubidity, float *activity)
 	
 	for (uint8_t i = 0; i < 20; i++)
 	{
-		currentValue = analogRead(A0) - iRtemperatureOffset;
+		currentValue = ads.readADC_SingleEnded(0) - iRtemperatureOffset;
 
 		sum += currentValue;
 		if (currentValue < minValue)
@@ -656,6 +652,7 @@ void setup() {
 
   initAccel();
   initDS18B20();
+  initAds();
 
   // decide whether we want configuration mode or normal mode
   if (shouldStartConfig()) {
@@ -691,7 +688,7 @@ void setup() {
   }
   // to make sure we wake up with STA but AP
   WiFi.mode(WIFI_STA);
-  Volt = 3.7; // fake voltage getBattery();
+  Volt = getBattery();
   // we try to survive
   if (isSafeMode(Volt)) WiFi.setOutputPower(0);
   else WiFi.setOutputPower(20.5);
